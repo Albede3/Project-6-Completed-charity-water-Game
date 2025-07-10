@@ -5,9 +5,16 @@
   <title>Water Drop Catch - Charity: Water</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
+    /* Use Proxima Nova, then Avenir, then fallback to sans-serif for all text */
+    html, body, h1, h2, h3, h4, h5, h6, p, span, div, label, select, button, a, footer, #factBox, #scoreboard, #misses, #score, #restartBtn, #startBtn, #resetBtn, .game-over-btn, .arrow-btn {
+      font-family: 'Proxima Nova', 'Avenir', Arial, Helvetica, sans-serif !important;
+    }
     html, body {
       width: 100vw;
       min-height: 100vh;
+      max-width: 100vw;
+      max-height: 100vh;
+      overflow-x: hidden;
       overscroll-behavior: contain;
       touch-action: none;
     }
@@ -16,9 +23,13 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      font-family: 'Segoe UI', sans-serif;
       margin: 0;
+      min-height: 100vh;
+      max-width: 100vw;
+      max-height: 100vh;
+      box-sizing: border-box;
     }
+    /* Remove Georgia example, not needed for brand font */
     h1 {
       color: #009edb;
       margin-top: 20px;
@@ -38,6 +49,9 @@
       margin-bottom: 12px;
       display: none;
       touch-action: none;
+      max-width: 100vw;
+      max-height: 80vh;
+      /* Prevents game area from overflowing the viewport */
     }
     #bucket {
       position: absolute;
@@ -177,7 +191,27 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 </head>
 <body>
-  <h1>💧 Water Drop Catch 💧</h1>
+  <!-- Replace emojis with image for the title -->
+  <h1>
+    <img src="img/water-can-transparent.png" alt="Water Can" style="height:2em;vertical-align:middle;margin-right:8px;">
+    Water Drop Catch
+    <img src="img/water-can-transparent.png" alt="Water Can" style="height:2em;vertical-align:middle;margin-left:8px;">
+  </h1>
+  <!-- Add background music audio element (hidden) -->
+  <audio id="bgMusic" src="game-music-loop-6-144641.mp3" loop></audio>
+  <!-- Use .mp4 for audio only, but browsers will play just the audio track -->
+  <audio id="startSound" src="game-start-better.mp4"></audio>
+  <audio id="gameOverSound" src="game-over-arcade-6435.mp3"></audio>
+  <audio id="winSound" src="game-start-6104.mp3"></audio>
+  <!-- Difficulty selector for students to pick game mode -->
+  <div id="difficultySelect" style="margin-bottom: 10px;">
+    <label for="difficulty" style="font-size:1.1em;">Difficulty:</label>
+    <select id="difficulty" style="font-size:1em; border-radius:8px; padding:3px 10px;">
+      <option value="easy">Easy</option>
+      <option value="normal" selected>Normal</option>
+      <option value="hard">Hard</option>
+    </select>
+  </div>
   <div id="scoreboard">
     <span id="score">Score: 0</span>
     <span id="misses">Misses: 0 / 5</span>
@@ -195,6 +229,20 @@
   <button id="restartBtn">Restart</button>
   <button id="startBtn" style="display: inline-block;">Start</button>
 
+  <!-- Footer with links to charity: water -->
+  <footer style="margin-top:24px; text-align:center; font-size:1.1em;">
+    <div style="padding:12px 0;">
+      <span>
+        <a href="https://www.charitywater.org/" target="_blank" style="color:#009edb; text-decoration:underline; font-weight:bold;">
+          Visit charity: water
+        </a>
+        &nbsp;|&nbsp;
+        <a href="https://www.charitywater.org/donate" target="_blank" style="color:#ffd600; text-decoration:underline; font-weight:bold;">
+          Donate Now
+        </a>
+      </span>
+    </div>
+  </footer>
   <script>
     // Game variables
     const gameArea = document.getElementById('gameArea');
@@ -209,6 +257,8 @@
     const leftBtn = document.getElementById('leftBtn');
     const rightBtn = document.getElementById('rightBtn');
     const mobileControls = document.getElementById('mobileControls');
+    // Add this line to get the difficulty selector
+    const difficultySelect = document.getElementById('difficulty');
 
     let bucketWidth = 80;
     let bucketLeft = 135; // initial left
@@ -225,6 +275,28 @@
       "Every $40 can give one person clean water for life.",
       "Clean water can reduce water-related diseases by 80%."
     ];
+
+    // Difficulty settings for win score and drop speed
+    // Adjusted: Easy is much easier, Hard is easier than before but still a challenge
+    const difficultySettings = {
+      easy:   { winScore: 10,  dropInterval: 3000 }, // very easy: fewer points, slow drops
+      normal: { winScore: 35,  dropInterval: 2000 }, // normal: as before
+      hard:   { winScore: 50,  dropInterval: 1400 }  // hard: more points, faster drops but not too fast
+    };
+
+    // Milestone messages for encouragement
+    const milestoneMessages = [
+      { percent: 0.25, text: "Great start! Keep going!" },
+      { percent: 0.5,  text: "Halfway there!" },
+      { percent: 0.75, text: "So close! Just a little more!" }
+    ];
+    // Track which milestones have been shown
+    let milestonesShown = [false, false, false];
+
+    // Track current difficulty and settings
+    let currentDifficulty = 'normal';
+    let winScore = difficultySettings.normal.winScore;
+    let dropSpeed = difficultySettings.normal.dropInterval;
 
     // Resize bucket/game for mobile dynamically
     function updateDimensions() {
@@ -313,6 +385,42 @@
       }
     });
 
+    // Get the background music element
+    const bgMusic = document.getElementById('bgMusic');
+    const startSound = document.getElementById('startSound');
+    const gameOverSound = document.getElementById('gameOverSound');
+    const winSound = document.getElementById('winSound');
+
+    // Function to play start sound
+    function playStartSound() {
+      startSound.currentTime = 0;
+      startSound.play().catch(() => {});
+    }
+    // Function to play game over sound
+    function playGameOverSound() {
+      gameOverSound.currentTime = 0;
+      gameOverSound.play().catch(() => {});
+    }
+    // Function to play win sound
+    function playWinSound() {
+      winSound.currentTime = 0;
+      winSound.play().catch(() => {});
+    }
+    // Function to start music (with user interaction for autoplay policies)
+    function playMusic() {
+      // Try to play music, catch errors if any
+      if (bgMusic.paused) {
+        bgMusic.volume = 0.4; // Set volume lower for background
+        bgMusic.play().catch(() => {});
+      }
+    }
+
+    // Function to stop music
+    function stopMusic() {
+      bgMusic.pause();
+      bgMusic.currentTime = 0;
+    }
+
     // Drop logic (clean & polluted)
     function createDrop() {
       if(isGameOver) return;
@@ -341,8 +449,19 @@
         let dropRight = left + 28;
         let bucketRight = bucketLeft + bucketWidth;
 
+        // Milestone encouragements
+        for (let i = 0; i < milestoneMessages.length; i++) {
+          // Calculate the milestone score (rounded)
+          const milestoneScore = Math.round(winScore * milestoneMessages[i].percent);
+          // Only show if not already shown, and not at 0
+          if (!milestonesShown[i] && milestoneScore > 0 && score === milestoneScore) {
+            showFact(milestoneMessages[i].text);
+            milestonesShown[i] = true;
+          }
+        }
+
         // Win check
-        if (!hasCelebrated && score >= 100) {
+        if (!hasCelebrated && score >= winScore) {
           celebrateWin();
           return;
         }
@@ -354,6 +473,7 @@
               score = Math.max(0, score - 10);
               scoreElem.textContent = "Score: " + score;
               showFact("Oh no! You caught polluted water.<br><b>-10 points</b><br><br>Try to catch only the clean drops!");
+              playGameOverSound(); // Play game over sound for bad drops
             } else {
               score++;
               scoreElem.textContent = "Score: " + score;
@@ -362,6 +482,7 @@
                 celebrateWin();
                 return;
               }
+              playStartSound(); // Play start sound for good drops only
             }
             drop.remove();
             return;
@@ -372,6 +493,7 @@
           if (!isPolluted) {
             misses++;
             missboard.textContent = "Misses: " + misses + " / 5";
+            playGameOverSound(); // Play game over sound for misses
             if(misses >= 5) endGame();
           }
           drop.remove();
@@ -387,9 +509,11 @@
       hasCelebrated = true;
       clearInterval(dropInterval);
       showResetBtn(false);
+      stopMusic(); // Stop music
+      playWinSound(); // Play win sound when player wins
       factBox.style.display = "block";
       factBox.innerHTML =
-        "<span style='font-size:1.3em;font-weight:bold;color:#009edb;'>🎉 You Win! 🎉</span><br>Your score: 100<br><br>You're a water hero!<br><br>Learn more or donate at <a href='https://charitywater.org' target='_blank'>charitywater.org</a>" +
+        `<span style='font-size:1.3em;font-weight:bold;color:#009edb;'>🎉 You Win! 🎉</span><br>Your score: ${score}<br><br>You're a water hero!<br><br>Learn more or donate at <a href='https://charitywater.org' target='_blank'>charitywater.org</a>` +
         "<br><br><button class='game-over-btn' id='restartInFact'>Restart</button>";
       restartBtn.style.display = "none";
       setTimeout(() => {
@@ -409,6 +533,7 @@
       isGameOver = true;
       clearInterval(dropInterval);
       showResetBtn(false);
+      stopMusic(); // Stop music
       factBox.style.display = "block";
       factBox.innerHTML =
         "Game Over!<br>Your score: " + score +
@@ -445,6 +570,7 @@
       else setTimeout(()=>factBox.style.display="none", 2800);
     }
 
+    // Restart the game
     function restartGame() {
       score = 0;
       misses = 0;
@@ -457,6 +583,11 @@
       document.querySelectorAll('.drop').forEach(el => el.remove());
       factBox.style.display = "none";
       showResetBtn(true);
+      // Reset difficulty to current selection
+      winScore = difficultySettings[currentDifficulty].winScore;
+      dropSpeed = difficultySettings[currentDifficulty].dropInterval;
+      milestonesShown = [false, false, false]; // Reset milestone tracking
+      playMusic(); // Start music after restart
       startDropping();
     }
 
@@ -464,14 +595,17 @@
       if (!isGameOver) restartGame();
     }
 
+    // Show or hide reset button and mobile controls
     function showResetBtn(show) {
       resetBtn.style.display = show ? 'block' : 'none';
       mobileControls.style.display = show ? 'flex' : 'none';
     }
 
+    // Button event listeners
     restartBtn.onclick = restartGame;
     resetBtn.onclick = resetGame;
 
+    // Start button click event
     startBtn.onclick = function() {
       startBtn.style.display = "none";
       scoreboard.style.display = "flex";
@@ -483,6 +617,10 @@
       hasCelebrated = false;
       gameStarted = true;
       updateDimensions();
+      // Set difficulty based on selection
+      currentDifficulty = difficultySelect.value;
+      winScore = difficultySettings[currentDifficulty].winScore;
+      dropSpeed = difficultySettings[currentDifficulty].dropInterval;
       bucketLeft = (gameArea.clientWidth-bucket.offsetWidth)/2;
       bucket.style.left = bucketLeft + 'px';
       scoreElem.textContent = "Score: 0";
@@ -490,18 +628,61 @@
       document.querySelectorAll('.drop').forEach(el => el.remove());
       factBox.style.display = "none";
       showResetBtn(true);
+      milestonesShown = [false, false, false]; // Reset milestone tracking
       startDropping();
+      playMusic(); // Start music
     };
 
+    // Listen for difficulty changes and reset the game each time
+    difficultySelect.addEventListener('change', function() {
+      // Update difficulty settings
+      currentDifficulty = difficultySelect.value;
+      winScore = difficultySettings[currentDifficulty].winScore;
+      dropSpeed = difficultySettings[currentDifficulty].dropInterval;
+
+      // If a game is running, clear drops and reset everything
+      // Stop any running drop intervals
+      if (dropInterval) {
+        clearInterval(dropInterval);
+      }
+      // Reset all game variables
+      score = 0;
+      misses = 0;
+      isGameOver = false;
+      hasCelebrated = false;
+      gameStarted = false;
+      scoreElem.textContent = "Score: 0";
+      missboard.textContent = "Misses: 0 / 5";
+      // Remove all drops from the game area
+      document.querySelectorAll('.drop').forEach(el => el.remove());
+      // Hide fact box and restart button
+      factBox.style.display = "none";
+      restartBtn.style.display = "none";
+      // Center the bucket
+      bucketLeft = (gameArea.clientWidth - bucket.offsetWidth) / 2;
+      bucket.style.left = bucketLeft + 'px';
+      // Hide the game area and scoreboard, show start button
+      gameArea.style.display = "none";
+      scoreboard.style.display = "none";
+      startBtn.style.display = "inline-block";
+      // Hide reset button and mobile controls
+      resetBtn.style.display = "none";
+      mobileControls.style.display = "none";
+      stopMusic(); // Stop music
+    });
+
+    // Initially hide elements
     scoreboard.style.display = "none";
     gameArea.style.display = "none";
     restartBtn.style.display = "none";
 
+    // Start dropping water drops at set intervals
     function startDropping() {
       updateDimensions();
+      // Use dropSpeed based on difficulty
       dropInterval = setInterval(() => {
         if(!isGameOver) createDrop();
-      }, 1600);
+      }, dropSpeed);
     }
 
     // On mobile, prevent double tap zoom
